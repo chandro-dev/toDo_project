@@ -60,50 +60,8 @@ jobs:
           docker push "$FRONT_IMAGE:${{ github.sha }}"
           docker push "$FRONT_IMAGE:latest"
 
-      # 🚀 Deploy backend
-      - name: Deploy backend service
-        if: env.ECS_BACK_SERVICE != ''
-        run: |
-          aws ecs update-service \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --service "${{ secrets.ECS_BACK_SERVICE }}" \
-            --force-new-deployment
-
-      # 🚀 Deploy frontend
-      - name: Deploy frontend service
-        if: env.ECS_FRONT_SERVICE != ''
-        run: |
-          aws ecs update-service \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --service "${{ env.ECS_FRONT_SERVICE }}" \
-            --force-new-deployment
-
-      # 🔍 Verificar despliegue
-      - name: Verify backend deployment
-        id: verify-back
-        continue-on-error: true
-        run: |
-          STATUS=$(aws ecs describe-services \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --services "${{ env.ECS_BACK_SERVICE }}" \
-            --query "services[0].deployments[0].rolloutState" \
-            --output text)
-          echo "status=$STATUS" >> $GITHUB_OUTPUT
-
-      - name: Verify frontend deployment
-        id: verify-front
-        continue-on-error: true
-        run: |
-          STATUS=$(aws ecs describe-services \
-            --cluster "${{ secrets.ECS_CLUSTER }}" \
-            --services "${{ env.ECS_FRONT_SERVICE }}" \
-            --query "services[0].deployments[0].rolloutState" \
-            --output text)
-          echo "status=$STATUS" >> $GITHUB_OUTPUT
-
       # 🔁 Fallback automático a PROD_CLUSTER
       - name: Deploy to prod-cluster if failed
-        if: steps.verify-back.outputs.status != 'COMPLETED' || steps.verify-front.outputs.status != 'COMPLETED'
         run: |
           echo "Primary cluster deployment incomplete — deploying to PROD cluster..."
           
