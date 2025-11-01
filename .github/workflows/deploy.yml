@@ -63,7 +63,7 @@ jobs:
 
       # 🚀 Deploy backend a ECS
       - name: Deploy backend service
-        if: env.ECS_BACK_SERVICE != ''
+        if: secrets.ECS_BACK_SERVICE != ''
         run: |
           aws ecs update-service \
             --cluster "${{ secrets.ECS_CLUSTER }}" \
@@ -72,7 +72,7 @@ jobs:
 
       # 🚀 Deploy frontend a ECS
       - name: Deploy frontend service
-        if: env.ECS_FRONT_SERVICE != ''
+        if: secrets.ECS_FRONT_SERVICE != ''
         run: |
           aws ecs update-service \
             --cluster "${{ secrets.ECS_CLUSTER }}" \
