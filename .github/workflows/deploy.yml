@@ -65,13 +65,13 @@ jobs:
         if: env.ECS_BACK_SERVICE != ''
         run: |
           aws ecs update-service \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --service "${{ env.ECS_BACK_SERVICE }}" \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --service "${{ secrets.ECS_BACK_SERVICE }}" \
             --force-new-deployment
 
       # 🚀 Deploy frontend
       - name: Deploy frontend service
-        if: env.ECS_FRONT_SERVICE != ''
+        if: secrets.ECS_FRONT_SERVICE != ''
         run: |
           aws ecs update-service \
             --cluster "${{ env.ECS_CLUSTER }}" \
@@ -84,8 +84,8 @@ jobs:
         continue-on-error: true
         run: |
           STATUS=$(aws ecs describe-services \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --services "${{ env.ECS_BACK_SERVICE }}" \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --services "${{ secrets.ECS_BACK_SERVICE }}" \
             --query "services[0].deployments[0].rolloutState" \
             --output text)
           echo "status=$STATUS" >> $GITHUB_OUTPUT
@@ -95,8 +95,8 @@ jobs:
         continue-on-error: true
         run: |
           STATUS=$(aws ecs describe-services \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --services "${{ env.ECS_FRONT_SERVICE }}" \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --services "${{ secrets.ECS_FRONT_SERVICE }}" \
             --query "services[0].deployments[0].rolloutState" \
             --output text)
           echo "status=$STATUS" >> $GITHUB_OUTPUT
@@ -108,11 +108,11 @@ jobs:
           echo "Primary cluster deployment incomplete — deploying to PROD cluster..."
           
           aws ecs update-service \
-            --cluster "${{ env.PROD_CLUSTER }}" \
-            --service "${{ env.ECS_BACK_SERVICE }}" \
+            --cluster "${{ secrets.PROD_CLUSTER }}" \
+            --service "${{ secrets.ECS_BACK_SERVICE }}" \
             --force-new-deployment
           
           aws ecs update-service \
-            --cluster "${{ env.PROD_CLUSTER }}" \
-            --service "${{ env.ECS_FRONT_SERVICE }}" \
+            --cluster "${{ secrets.PROD_CLUSTER }}" \
+            --service "${{ secrets.ECS_FRONT_SERVICE }}" \
             --force-new-deployment
