@@ -1,0 +1,32 @@
+{
+  "family": "td-back",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::084375557754:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "back",
+      "image": "084375557754.dkr.ecr.us-east-1.amazonaws.com/mi-back:latest",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 8000, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "FLASK_RUN_HOST", "value": "0.0.0.0" },
+        { "name": "FLASK_RUN_PORT", "value": "8000" },
+        { "name": "MONGO_URI", "value": "mongodb://mongo-service.dev.local:27017" },
+        { "name": "MONGO_DB", "value": "todo_db" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/back",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
