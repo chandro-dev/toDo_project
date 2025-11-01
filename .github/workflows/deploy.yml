@@ -14,7 +14,7 @@ env:
   ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
   ECS_BACK_SERVICE: ${{ secrets.ECS_BACK_SERVICE }}
   ECS_FRONT_SERVICE: ${{ secrets.ECS_FRONT_SERVICE }}
-  PROD_CLUSTER: ${{ secrets.PROD_CLUSTER }} # nuevo cluster de respaldo
+  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }} # nuevo cluster de respaldo
 
 jobs:
   build-and-deploy:
