@@ -1,22 +1,73 @@
-name: Deploy to Raspberry Pi
+name: Deploy to AWS
 
 on:
   push:
     branches:
-      - master   # o la rama que quieras
+      - master
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_BACK_REPO: ${{ secrets.ECR_BACK_REPO }}
+  ECR_FRONT_REPO: ${{ secrets.ECR_FRONT_REPO }}
+  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+  ECS_BACK_SERVICE: ${{ secrets.ECS_BACK_SERVICE }}
+  ECS_FRONT_SERVICE: ${{ secrets.ECS_FRONT_SERVICE }}
 
 jobs:
-  deploy:
-    runs-on: self-hosted
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Stop and remove old stack
-        run: |
-          docker compose -f docker-compose.yml down || true
-          docker network prune -f || true
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Build and recreate
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
-          docker compose -f docker-compose.yml up -d --build
+          BACK_IMAGE="$REGISTRY/${{ secrets.ECR_BACK_REPO }}"
+          docker build --pull --platform linux/amd64 -t "$BACK_IMAGE:${{ github.sha }}" back
+          docker tag "$BACK_IMAGE:${{ github.sha }}" "$BACK_IMAGE:latest"
+          docker push "$BACK_IMAGE:${{ github.sha }}"
+          docker push "$BACK_IMAGE:latest"
+
+      - name: Build and push frontend image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          FRONT_IMAGE="$REGISTRY/${{ secrets.ECR_FRONT_REPO }}"
+          docker build --pull --platform linux/amd64 -t "$FRONT_IMAGE:${{ github.sha }}" front
+          docker tag "$FRONT_IMAGE:${{ github.sha }}" "$FRONT_IMAGE:latest"
+          docker push "$FRONT_IMAGE:${{ github.sha }}"
+          docker push "$FRONT_IMAGE:latest"
+
+      - name: Deploy backend service
+        if: env.ECS_BACK_SERVICE != ''
+        run: |
+          aws ecs update-service \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --service "${{ secrets.ECS_BACK_SERVICE }}" \
+            --force-new-deployment
+
+      - name: Deploy frontend service
+        if: env.ECS_FRONT_SERVICE != ''
+        run: |
+          aws ecs update-service \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --service "${{ secrets.ECS_FRONT_SERVICE }}" \
+            --force-new-deployment
