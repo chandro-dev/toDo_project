@@ -14,6 +14,7 @@ env:
   ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
   ECS_BACK_SERVICE: ${{ secrets.ECS_BACK_SERVICE }}
   ECS_FRONT_SERVICE: ${{ secrets.ECS_FRONT_SERVICE }}
+  PROD_CLUSTER: ${{ secrets.PROD_CLUSTER }} # nuevo cluster de respaldo
 
 jobs:
   build-and-deploy:
@@ -21,6 +22,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,26 +38,30 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # 🧱 BACKEND: construye con el mismo contexto que tu docker-compose
       - name: Build and push backend image
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           BACK_IMAGE="$REGISTRY/${{ secrets.ECR_BACK_REPO }}"
-          docker build --pull --platform linux/amd64 -t "$BACK_IMAGE:${{ github.sha }}" back
+          docker build --pull --platform linux/amd64 -t "$BACK_IMAGE:${{ github.sha }}" ./back
           docker tag "$BACK_IMAGE:${{ github.sha }}" "$BACK_IMAGE:latest"
           docker push "$BACK_IMAGE:${{ github.sha }}"
           docker push "$BACK_IMAGE:latest"
 
+      # 🌐 FRONTEND: replica la lógica del docker-compose
       - name: Build and push frontend image
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           FRONT_IMAGE="$REGISTRY/${{ secrets.ECR_FRONT_REPO }}"
-          docker build --pull --platform linux/amd64 -t "$FRONT_IMAGE:${{ github.sha }}" front
+          cp ./front/index.html ./front/nginx.html || true
+          docker build --pull --platform linux/amd64 -t "$FRONT_IMAGE:${{ github.sha }}" ./front
           docker tag "$FRONT_IMAGE:${{ github.sha }}" "$FRONT_IMAGE:latest"
           docker push "$FRONT_IMAGE:${{ github.sha }}"
           docker push "$FRONT_IMAGE:latest"
 
+      # 🚀 Deploy backend a ECS
       - name: Deploy backend service
         if: env.ECS_BACK_SERVICE != ''
         run: |
@@ -64,10 +70,50 @@ jobs:
             --service "${{ secrets.ECS_BACK_SERVICE }}" \
             --force-new-deployment
 
+      # 🚀 Deploy frontend a ECS
       - name: Deploy frontend service
         if: env.ECS_FRONT_SERVICE != ''
         run: |
           aws ecs update-service \
             --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --service "${{ secrets.ECS_FRONT_SERVICE }}" \
+            --force-new-deployment
+
+      # 🔍 Verifica si los despliegues fueron exitosos
+      - name: Verify backend deployment
+        id: verify-back
+        continue-on-error: true
+        run: |
+          STATUS=$(aws ecs describe-services \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --services "${{ secrets.ECS_BACK_SERVICE }}" \
+            --query "services[0].deployments[0].rolloutState" \
+            --output text)
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+
+      - name: Verify frontend deployment
+        id: verify-front
+        continue-on-error: true
+        run: |
+          STATUS=$(aws ecs describe-services \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --services "${{ secrets.ECS_FRONT_SERVICE }}" \
+            --query "services[0].deployments[0].rolloutState" \
+            --output text)
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+
+      # 🔁 Fallback automático a prod-cluster si falla
+      - name: Deploy to prod-cluster if failed
+        if: steps.verify-back.outputs.status != 'COMPLETED' || steps.verify-front.outputs.status != 'COMPLETED'
+        run: |
+          echo "Primary cluster deployment incomplete — deploying to PROD cluster..."
+          
+          aws ecs update-service \
+            --cluster "${{ env.PROD_CLUSTER }}" \
+            --service "${{ secrets.ECS_BACK_SERVICE }}" \
+            --force-new-deployment
+          
+          aws ecs update-service \
+            --cluster "${{ env.PROD_CLUSTER }}" \
             --service "${{ secrets.ECS_FRONT_SERVICE }}" \
             --force-new-deployment
