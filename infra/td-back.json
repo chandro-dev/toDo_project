@@ -11,7 +11,10 @@
       "image": "084375557754.dkr.ecr.us-east-1.amazonaws.com/mi-back:latest",
       "essential": true,
       "portMappings": [
-        { "containerPort": 8000, "protocol": "tcp" }
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
       ],
       "environment": [
         { "name": "FLASK_RUN_HOST", "value": "0.0.0.0" },
@@ -22,7 +25,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/back",
+          "awslogs-group": "/ecs/td-back",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
